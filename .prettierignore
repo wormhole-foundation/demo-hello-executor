@@ -1,0 +1,4 @@
+*.sol
+src/
+test/
+script/
