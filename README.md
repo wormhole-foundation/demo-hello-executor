@@ -126,7 +126,13 @@ function _executeVaa(
 }
 ```
 
-**Important:** This function must handle non-zero `msg.value` correctly since the calling function is payable.
+**Important:** This function must handle non-zero `msg.value` correctly since the calling function is payable. In the example we just make sure it's empty as we have no use for it.
+
+```solidity
+    if (msg.value > 0) {
+        revert NoValueAllowed();
+    }
+```
 
 ### 6. **Implement Message Sending with `_publishAndRelay()`**
 

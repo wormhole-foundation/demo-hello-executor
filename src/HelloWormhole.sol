@@ -4,6 +4,7 @@ pragma solidity ^0.8.22;
 import {ExecutorIntegration} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
 
 contract HelloWormhole is ExecutorIntegration, AccessControl {
     using SequenceReplayProtectionLib for *;
@@ -12,7 +13,7 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
 
     mapping(uint16 => bytes32) public peers;
 
-    constructor(address coreBridge, address executors) ExecutorIntegration(coreBridge, executors) {
+    constructor(address coreBridge, address executor) ExecutorIntegration(coreBridge, executor) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PEER_ADMIN_ROLE, msg.sender);
     }
@@ -20,13 +21,14 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
     event GreetingReceived(string greeting, uint16 senderChain, bytes32 sender);
     event GreetingSent(string greeting, uint16 targetChain, uint64 sequence);
 
+    error NoValueAllowed();
+
     function _getPeer(uint16 chainId) internal view override returns (bytes32) {
         return peers[chainId];
     }
 
-    function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) returns (bytes32) {
+    function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADMIN_ROLE) {
         peers[chainId] = peerAddress;
-        return peerAddress;
     }
 
     function _replayProtect(
@@ -54,6 +56,9 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
         internal
         override
     {
+        if (msg.value > 0) {
+            revert NoValueAllowed();
+        }
         // Decode the payload to extract the greeting message
         string memory greeting = string(payload);
 
@@ -72,7 +77,7 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
         // Publish and relay the message to the target chain
         sequence = _publishAndRelay(
             payload,
-            200, // finalized consistency level
+            CONSISTENCY_LEVEL_INSTANT, // choose safe or finalized based on your needs
             targetChain,
             msg.sender, // refund address
             signedQuote,
