@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {ExecutorIntegration} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceive} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
 
-contract HelloWormhole is ExecutorIntegration, AccessControl {
+contract HelloWormhole is ExecutorSendReceive, AccessControl {
     using SequenceReplayProtectionLib for *;
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
     mapping(uint16 => bytes32) public peers;
 
-    constructor(address coreBridge, address executor) ExecutorIntegration(coreBridge, executor) {
+    constructor(address coreBridge, address executor) ExecutorSendReceive(coreBridge, executor) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PEER_ADMIN_ROLE, msg.sender);
     }
@@ -66,11 +66,13 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
-    function sendGreeting(string calldata greeting, uint16 targetChain, uint128 gasLimit, bytes calldata signedQuote)
-        external
-        payable
-        returns (uint64 sequence)
-    {
+    function sendGreeting(
+        string calldata greeting,
+        uint16 targetChain,
+        uint128 gasLimit,
+        uint256 totalCost,
+        bytes calldata signedQuote
+    ) external payable returns (uint64 sequence) {
         // Encode the greeting as bytes
         bytes memory payload = bytes(greeting);
 
@@ -78,6 +80,7 @@ contract HelloWormhole is ExecutorIntegration, AccessControl {
         sequence = _publishAndRelay(
             payload,
             CONSISTENCY_LEVEL_INSTANT, // choose safe or finalized based on your needs
+            totalCost,
             targetChain,
             msg.sender, // refund address
             signedQuote,
