@@ -10,41 +10,69 @@ This demo provides a complete example of cross-chain messaging integration with 
 
 ## What's Included
 
-- ✅ **HelloWormhole Contract** - Complete Executor integration with role-based access control
-- ✅ **Cross-chain messaging** - Send and receive greetings between chains
-- ✅ **Replay protection** - Sequence-based replay protection using SDK library
-- ✅ **Fork testing** - Tests running on Sepolia and Base Sepolia forks
-- ✅ **GitHub Actions CI** - Automated testing and building
+-   ✅ **HelloWormhole Contract** - Complete Executor integration with role-based access control
+-   ✅ **Cross-chain messaging** - Send and receive greetings between chains
+-   ✅ **Replay protection** - Sequence-based replay protection using SDK library
+-   ✅ **Fork testing** - Tests running on Sepolia and Base Sepolia forks
+-   ✅ **GitHub Actions CI** - Automated testing and building
 
 ## Installation
 
+**Solidity Dependencies:**
+
 ```bash
 forge install
+```
+
+**TypeScript/Node Dependencies (for E2E tests):**
+
+```bash
+npm install
 ```
 
 ## Steps to Build an Executor Integration
 
 This demo follows the standard pattern for integrating with Wormhole's Executor. Here's how to build your own:
 
-### 1. **Create a Contract Inheriting from `ExecutorIntegration`**
+### 1. **Create a Contract Inheriting from an Executor Integration Base**
 
-Your contract must inherit from the abstract `ExecutorIntegration` contract:
+Your contract must inherit from one of the abstract Executor integration contracts. This demo uses **`ExecutorSendReceive`**, which combines both sending and receiving functionality:
 
 ```solidity
-import {ExecutorIntegration} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceive} from "wormhole-solidity-sdk/Executor/Integration.sol";
 
-contract HelloWormhole is ExecutorIntegration {
+contract HelloWormhole is ExecutorSendReceive {
     // Your contract implementation
 }
 ```
+
+**Choosing the Right Base Contract:**
+
+The SDK provides three options depending on your use case:
+
+-   **`ExecutorSendReceive`** - Supports both sending and receiving messages (used in this demo)
+
+    -   Use when: Your contract needs bidirectional messaging (most common case)
+    -   Inherits from: `ExecutorSendImpl` + `ExecutorReceiveImpl`
+
+-   **`ExecutorSend`** - Only sends messages, cannot receive
+
+    -   Use when: Your contract only initiates cross-chain calls (e.g., a vault that sends unlock requests)
+    -   Smaller contract size, lower deployment cost
+
+-   **`ExecutorReceive`** - Only receives messages, cannot send
+    -   Use when: Your contract only responds to cross-chain calls (e.g., a target contract that processes incoming requests)
+    -   Smaller contract size, lower deployment cost
+
+**Example:** In a token bridge, you might use `ExecutorSend` on the source chain (locks tokens and sends message) and `ExecutorReceive` on the destination chain (receives message and mints tokens).
 
 ### 2. **Implement the Constructor**
 
 Pass the Wormhole CoreBridge and Executor addresses to the parent constructor:
 
 ```solidity
-constructor(address coreBridge, address executor) 
-    ExecutorIntegration(coreBridge, executor) 
+constructor(address coreBridge, address executor)
+    ExecutorSendReceive(coreBridge, executor)
 {
     // Your initialization logic
     // Example: Set up access control roles
@@ -53,8 +81,9 @@ constructor(address coreBridge, address executor)
 ```
 
 **Finding addresses:**
-- Use the Wormhole Solidity SDK's `TestnetChainConstants` or `MainnetChainConstants` libraries
-- Example: `TestnetChainConstants._coreBridge(CHAIN_ID_SEPOLIA)`
+
+-   Use the Wormhole Solidity SDK's `TestnetChainConstants` or `MainnetChainConstants` libraries
+-   Example: `TestnetChainConstants._coreBridge(CHAIN_ID_SEPOLIA)`
 
 ### 3. **Implement `_getPeer()` Function**
 
@@ -78,6 +107,7 @@ function setPeer(uint16 chainId, bytes32 peerAddress) external onlyRole(PEER_ADM
 Use one of the Wormhole Solidity SDK's replay protection libraries:
 
 **Option A: Sequence-based (Recommended but strictly for finalized VAAs)**
+
 ```solidity
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 
@@ -92,6 +122,7 @@ function _replayProtect(
 ```
 
 **Option B: Hash-based (For all consistency levels)**
+
 ```solidity
 import {HashReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 
@@ -120,7 +151,7 @@ function _executeVaa(
 ) internal override {
     // Decode your payload
     string memory greeting = string(payload);
-    
+
     // Your business logic here
     emit GreetingReceived(greeting, peerChain, peerAddress);
 }
@@ -147,7 +178,7 @@ function sendGreeting(
 ) external payable returns (uint64 sequence) {
     // Encode your payload
     bytes memory payload = bytes(greeting);
-    
+
     // Use the internal _publishAndRelay function
     sequence = _publishAndRelay(
         payload,
@@ -159,15 +190,16 @@ function sendGreeting(
         0,                // msg.value to forward (if any)
         ""                // extra relay instructions
     );
-    
+
     emit GreetingSent(greeting, targetChain, sequence);
 }
 ```
 
 **Getting the signed quote:**
-- Call the Executor's off-chain pricing API before invoking your function
-- Pass the quote as `signedQuote` parameter
-- Send enough value to cover: `coreBridge.messageFee() + executorFee`
+
+-   Call the Executor's off-chain pricing API before invoking your function
+-   Pass the quote as `signedQuote` parameter
+-   Send enough value to cover: `coreBridge.messageFee() + executorFee`
 
 ### 7. **Add Access Control (Optional but Recommended)**
 
@@ -176,12 +208,12 @@ Use OpenZeppelin's AccessControl or Ownable libraries for managing permissions:
 ```solidity
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract HelloWormhole is ExecutorIntegration, AccessControl {
+contract HelloWormhole is ExecutorSendReceive, AccessControl {
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
-    
-    function setPeer(uint16 chainId, bytes32 peerAddress) 
-        external 
-        onlyRole(PEER_ADMIN_ROLE) 
+
+    function setPeer(uint16 chainId, bytes32 peerAddress)
+        external
+        onlyRole(PEER_ADMIN_ROLE)
     {
         peers[chainId] = peerAddress;
     }
@@ -200,10 +232,10 @@ forge test -vvv
 forge test --match-test test_DeploymentOnSepolia -vvv
 ```
 
-
 ## Deployment
 
 1. **Set environment variables:**
+
 ```bash
 export CORE_BRIDGE_ADDRESS=<wormhole-core-bridge>
 export EXECUTOR_ADDRESS=<executor-address>
@@ -211,11 +243,13 @@ export PRIVATE_KEY=<your-private-key>
 ```
 
 2. **Deploy to testnet:**
+
 ```bash
 forge script script/HelloWormhole.s.sol --rpc-url sepolia --broadcast
 ```
 
 3. **Set up peers:**
+
 ```solidity
 // After deploying to both chains, set them as peers
 helloWormholeSepolia.setPeer(CHAIN_ID_BASE_SEPOLIA, baseSepoliaAddress);
@@ -225,25 +259,30 @@ helloWormholeBaseSepolia.setPeer(CHAIN_ID_SEPOLIA, sepoliaAddress);
 ## Key Concepts
 
 ### Chain IDs
+
 Wormhole uses its own chain ID system. Use constants from the SDK:
+
 ```solidity
 import {CHAIN_ID_SEPOLIA, CHAIN_ID_BASE_SEPOLIA} from "wormhole-solidity-sdk/constants/Chains.sol";
 ```
 
 ### Universal Addresses
+
 Cross-chain addresses are represented as `bytes32`:
+
 ```solidity
 import {toUniversalAddress, fromUniversalAddress} from "wormhole-solidity-sdk/utils/UniversalAddress.sol";
 ```
 
 ### Consistency Levels
-- `1` = Instant (use hash-based replay protection)
-- `200` = Finalized (use sequence-based replay protection)
-- `201` = Safe (hash or sequence depending on risk tolerance, hash preferred)
-- `203` = Custom (hash or sequence depending on risk tolerance, hash preferred)
+
+-   `1` = Instant (use hash-based replay protection)
+-   `200` = Finalized (use sequence-based replay protection)
+-   `201` = Safe (hash or sequence depending on risk tolerance, hash preferred)
+-   `203` = Custom (hash or sequence depending on risk tolerance, hash preferred)
 
 ## Resources
 
-- [Wormhole Docs](https://wormhole.com/docs)
-- [Solidity SDK](https://github.com/wormhole-foundation/wormhole-solidity-sdk)
-- [Executor Documentation](https://wormhole.com/docs/protocol/infrastructure/relayer/#executor)
+-   [Wormhole Docs](https://wormhole.com/docs)
+-   [Solidity SDK](https://github.com/wormhole-foundation/wormhole-solidity-sdk)
+-   [Executor Documentation](https://wormhole.com/docs/protocol/infrastructure/relayer/#executor)
