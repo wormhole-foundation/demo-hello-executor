@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {ExecutorSendReceive} from "wormhole-solidity-sdk/Executor/Integration.sol";
+import {ExecutorSendReceiveQuoteOffChain} from "wormhole-solidity-sdk/Executor/Integration.sol";
 import {SequenceReplayProtectionLib} from "wormhole-solidity-sdk/libraries/ReplayProtection.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {CONSISTENCY_LEVEL_INSTANT} from "wormhole-solidity-sdk/constants/ConsistencyLevel.sol";
 
-contract HelloWormhole is ExecutorSendReceive, AccessControl {
+contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
     using SequenceReplayProtectionLib for *;
 
     bytes32 public constant PEER_ADMIN_ROLE = keccak256("PEER_ADMIN_ROLE");
 
     mapping(uint16 => bytes32) public peers;
 
-    constructor(address coreBridge, address executor) ExecutorSendReceive(coreBridge, executor) {
+    constructor(address coreBridge, address executor) ExecutorSendReceiveQuoteOffChain(coreBridge, executor) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PEER_ADMIN_ROLE, msg.sender);
     }
