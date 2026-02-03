@@ -10,7 +10,7 @@
   },
   "lib/wormhole-solidity-sdk": {
     "branch": {
-      "name": "main",
+      "name": "executor-onchain-quotes",
       "rev": "94865b376b80dd3429f69da866394c5d93617180"
     }
   }
