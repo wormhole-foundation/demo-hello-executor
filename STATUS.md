@@ -1,19 +1,17 @@
 # Cross-VM Demo Status - EVM Side
 
-**Last Updated:** 2026-02-17 13:00 UTC
+**Last Updated:** 2026-02-17 13:15 UTC
 
-## Quick State (for context recovery)
+## Quick State
 
 ```
 WORKING:
   ✅ EVM → Solana (Sepolia → Solana Devnet)
   ✅ Solana → Fogo (uses Solana repo)
   
-TESTING:
-  ⏳ Solana → EVM (VAAs signed, checking relay)
-  
-BLOCKED:
-  ❌ Fogo → Solana (Fogo program config issue - see Solana STATUS.md)
+IN PROGRESS:
+  ⏳ Solana → EVM (VAAs signed, relay in progress)
+  ⏳ Fogo → Solana (send_greeting + request_relay work, needs more FOGO)
 ```
 
 ## Key Changes in This PR
@@ -30,15 +28,9 @@ function sendGreetingWithMsgValue(
 ) public payable returns (uint64 sequence)
 ```
 
-### 2. e2e/sendToSolana.ts
-- Uses API's `estimatedCost` directly
-- Passes `msgValue` (15M lamports) in relay instructions
-- Handles EVM → Solana route
-
-### 3. Cost Calculation Fix
+### 2. Cost Calculation Fix
 ```typescript
-// OLD (broken): quote.estimatedCost was undefined
-// NEW (working): use API response directly
+// Use API response directly (estimatedCost includes msgValue conversion)
 const cost = BigInt(quote.estimatedCost);
 ```
 
@@ -55,13 +47,22 @@ const cost = BigInt(quote.estimatedCost);
 - **Sepolia TX:** `0xbf34754ffae3495c18018176a6ebb4417001695cb63b8a5fa70258d0a925c891`
 - **Status:** `submitted`, 3 Solana TXs completed
 
-## Key Parameters
+## Key Findings
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| msgValue (Solana) | 15,000,000 lamports | ~0.015 SOL |
-| gasLimit | 500,000 | Compute units |
-| Relay Instructions | `0x01 + gasLimit(32) + msgValue(32)` | Hex encoded |
+### SVM↔SVM Peer Registration (Asymmetric!)
+- Source → Dest: Register **PROGRAM** ID
+- Dest → Source: Register **EMITTER** PDA
+
+### msgValue for SVM Destinations
+```typescript
+const SOLANA_MSG_VALUE_LAMPORTS = 15_000_000n; // ~0.015 SOL
+```
+
+### Executor Program
+Same on Solana Devnet & Fogo Testnet:
+```
+execXUrAsMnqMmTHj5m7N1YQgsDz3cwGLYCYuDRciV
+```
 
 ## Repos & PRs
 
@@ -80,21 +81,9 @@ script/SetupSolanaPeer.s.sol - Peer registration
 STATUS.md                    - This file
 ```
 
-## SVM↔SVM Findings (documented here for reference)
-
-### Peer Registration Asymmetry
-- Source → Dest: Register **PROGRAM** ID
-- Dest → Source: Register **EMITTER** PDA
-
-### Executor Program
-Same on Solana Devnet & Fogo Testnet:
-```
-execXUrAsMnqMmTHj5m7N1YQgsDz3cwGLYCYuDRciV
-```
-
 ## Next Steps
 
 1. ✅ EVM → Solana working
 2. ⏳ Confirm Solana → EVM completes
-3. ⏳ Fix Fogo program config (needs FOGO tokens)
+3. ⏳ Complete Fogo → Solana (needs FOGO funding)
 4. 📝 Merge PR after all routes verified
