@@ -1,47 +1,53 @@
-# Cross-VM Demo Status
+# Cross-VM Demo Status - EVM Side
 
-**Last Updated:** 2026-02-17 12:52 UTC
+**Last Updated:** 2026-02-17 13:00 UTC
 
-## 🎉 Multiple Routes Working!
+## Quick State (for context recovery)
 
-| Direction | Status | Notes |
-|-----------|--------|-------|
-| EVM → Solana | ✅ Working | msgValue + API cost fixed |
-| Solana → Fogo | ✅ Working | Peer registration + msgValue fixed |
-| Solana → EVM | ⏳ Testing | VAAs signing (13-16), checking relay |
-| Fogo → Solana | 🔧 Needs testing | SVM↔SVM route |
+```
+WORKING:
+  ✅ EVM → Solana (Sepolia → Solana Devnet)
+  ✅ Solana → Fogo (uses Solana repo)
+  
+TESTING:
+  ⏳ Solana → EVM (VAAs signed, checking relay)
+  
+BLOCKED:
+  ❌ Fogo → Solana (Fogo program config issue - see Solana STATUS.md)
+```
 
-## Key Fixes Applied
+## Key Changes in This PR
 
-### 1. Cost Calculation
-- **Problem:** SDK didn't return `estimatedCost`
-- **Solution:** Use API's `estimatedCost` directly
+### 1. HelloWormhole.sol - msgValue Support
+```solidity
+function sendGreetingWithMsgValue(
+    string calldata greeting,
+    uint16 targetChain,
+    uint128 gasLimit,
+    uint128 msgValue,  // NEW: for SVM destinations (lamports)
+    uint256 totalCost,
+    bytes calldata signedQuote
+) public payable returns (uint64 sequence)
+```
 
-### 2. msgValue for SVM Destinations
-- **Solidity:** Added `sendGreetingWithMsgValue()` accepting `msgValue` parameter
-- **Value:** 15,000,000 lamports (0.015 SOL) for rent/fees
+### 2. e2e/sendToSolana.ts
+- Uses API's `estimatedCost` directly
+- Passes `msgValue` (15M lamports) in relay instructions
+- Handles EVM → Solana route
 
-### 3. SVM↔SVM Peer Registration (Asymmetric!)
-- **Source chain:** Register destination **PROGRAM** (for routing)
-- **Dest chain:** Register source **EMITTER** (for VAA verification)
-
-This differs from EVM↔EVM where the same address is registered on both sides.
+### 3. Cost Calculation Fix
+```typescript
+// OLD (broken): quote.estimatedCost was undefined
+// NEW (working): use API response directly
+const cost = BigInt(quote.estimatedCost);
+```
 
 ## Deployed Contracts
 
 | Chain | Address | Notes |
 |-------|---------|-------|
-| Sepolia | `0x978d3cF51e9358C58a9538933FC3E277C29915C5` | HelloWormhole (with msgValue) ✅ |
-| Sepolia | `0xC83dcae38111019e8efbA0B78CE6BA055e7A3f2c` | HelloWormhole (old, msgValue=0) ❌ |
-| Solana Devnet | `5qAHNEvdL7gAj49q4jm1718h6tCGX5q8KBurM9iiQ4Rp` | HelloExecutor ✅ |
-| Fogo Testnet | TBD | HelloExecutor |
-
-## Executor Program Addresses
-
-Both Solana Devnet and Fogo Testnet share the same Executor program:
-```
-execXUrAsMnqMmTHj5m7N1YQgsDz3cwGLYCYuDRciV
-```
+| Sepolia | `0x978d3cF51e9358C58a9538933FC3E277C29915C5` | NEW - with msgValue ✅ |
+| Sepolia | `0xC83dcae38111019e8efbA0B78CE6BA055e7A3f2c` | OLD - msgValue=0 ❌ |
 
 ## Successful Transactions
 
@@ -49,40 +55,46 @@ execXUrAsMnqMmTHj5m7N1YQgsDz3cwGLYCYuDRciV
 - **Sepolia TX:** `0xbf34754ffae3495c18018176a6ebb4417001695cb63b8a5fa70258d0a925c891`
 - **Status:** `submitted`, 3 Solana TXs completed
 
-### Solana → Fogo
-- **Status:** `submitted`, 3 TXs completed
-- **Fogo blocks:** 692607960, 692608021, 692608070
-
 ## Key Parameters
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| msgValue (Solana) | 15,000,000 lamports | ~0.015 SOL for rent/fees |
-| gasLimit (EVM) | 500,000 | Compute units |
-| Relay Instructions | `0x01 + gasLimit + msgValue` | 32-byte hex each |
-| Cost buffer | +10% | On API's estimatedCost |
+| msgValue (Solana) | 15,000,000 lamports | ~0.015 SOL |
+| gasLimit | 500,000 | Compute units |
+| Relay Instructions | `0x01 + gasLimit(32) + msgValue(32)` | Hex encoded |
 
-## Testing
+## Repos & PRs
 
-```bash
-# EVM → Solana
-npx tsx e2e/sendToSolana.ts "Hello from Sepolia!"
+| Repo | URL | Status |
+|------|-----|--------|
+| EVM (this) | [wormhole-foundation/demo-hello-executor#2](https://github.com/wormhole-foundation/demo-hello-executor/pull/2) | PR open |
+| Solana | [evgeniko/demo-hello-executor-solana](https://github.com/evgeniko/demo-hello-executor-solana) | Changes on main |
 
-# Check relay status
-curl -s -X POST "https://executor-testnet.labsapis.com/v0/status/tx" \
-  -H "Content-Type: application/json" \
-  -d '{"chainId": 10002, "txHash": "<TX_HASH>"}'
+## Files Changed
+
+```
+src/HelloWormhole.sol        - Added sendGreetingWithMsgValue()
+e2e/sendToSolana.ts          - EVM → Solana test script
+e2e/executor.ts              - Quote parsing helpers
+script/SetupSolanaPeer.s.sol - Peer registration
+STATUS.md                    - This file
 ```
 
-## Related
+## SVM↔SVM Findings (documented here for reference)
 
-- **Solana repo:** https://github.com/evgeniko/demo-hello-executor-solana
-- **PR:** [wormhole-foundation/demo-hello-executor#2](https://github.com/wormhole-foundation/demo-hello-executor/pull/2)
+### Peer Registration Asymmetry
+- Source → Dest: Register **PROGRAM** ID
+- Dest → Source: Register **EMITTER** PDA
+
+### Executor Program
+Same on Solana Devnet & Fogo Testnet:
+```
+execXUrAsMnqMmTHj5m7N1YQgsDz3cwGLYCYuDRciV
+```
 
 ## Next Steps
 
-1. ✅ ~~Fix EVM → Solana relay~~
-2. ✅ ~~Fix Solana → Fogo relay~~
-3. ⏳ Confirm Solana → EVM relay completes
-4. 🔧 Test Fogo → Solana route
-5. 📝 Document SVM↔SVM patterns for Wormhole docs
+1. ✅ EVM → Solana working
+2. ⏳ Confirm Solana → EVM completes
+3. ⏳ Fix Fogo program config (needs FOGO tokens)
+4. 📝 Merge PR after all routes verified
