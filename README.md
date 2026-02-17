@@ -4,6 +4,33 @@ Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** a
 
 > **License:** Code provided "AS IS", without warranties. Audit before mainnet deployment.
 
+## Cross-VM Status (EVM ↔ Solana)
+
+| Route | Status | Notes |
+|-------|--------|-------|
+| EVM → Solana | ✅ **Working** | TX: `0xbf347...` - 3 Solana TXs completed |
+| Solana → Fogo | ✅ **Working** | 3 TXs completed on Fogo |
+| Solana → EVM | ⏳ Testing | VAAs signed (13-16) |
+| Fogo → Solana | ⏳ Code ready | Needs FOGO funding for relay |
+
+### Key Changes for Cross-VM
+
+1. **HelloWormhole.sol** - Added `sendGreetingWithMsgValue()` for SVM destinations
+2. **msgValue** - SVM destinations need ~15M lamports (~0.015 SOL) for rent/fees
+3. **Cost calculation** - Use API's `estimatedCost` directly (SDK didn't return it)
+
+### Key Findings: SVM↔SVM Peer Registration
+
+- **Source chain:** Register destination **PROGRAM** ID
+- **Dest chain:** Register source **EMITTER** PDA
+
+### Related
+
+- **Solana repo:** https://github.com/evgeniko/demo-hello-executor-solana
+- **New Sepolia contract:** `0x978d3cF51e9358C58a9538933FC3E277C29915C5`
+
+---
+
 ## Contracts
 
 | Contract                    | Quote Method    | Base Class                         | Constructor Param      |
