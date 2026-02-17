@@ -66,13 +66,25 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
-    function sendGreeting(
+    /**
+     * @notice Send a cross-chain greeting with custom msgValue (for SVM destinations)
+     * @dev For EVM→Solana transfers, msgValue should be in LAMPORTS (e.g., 15_000_000 for 0.015 SOL)
+     * @param greeting The message to send
+     * @param targetChain The Wormhole chain ID of the destination
+     * @param gasLimit Gas limit / compute units for execution on target chain
+     * @param msgValue Native token amount for destination (lamports for Solana, wei for EVM)
+     * @param totalCost Total cost (Wormhole fee + executor fee)
+     * @param signedQuote The signed quote from Executor API
+     * @return sequence The Wormhole sequence number
+     */
+    function sendGreetingWithMsgValue(
         string calldata greeting,
         uint16 targetChain,
         uint128 gasLimit,
+        uint128 msgValue,
         uint256 totalCost,
         bytes calldata signedQuote
-    ) external payable returns (uint64 sequence) {
+    ) public payable returns (uint64 sequence) {
         // Encode the greeting as bytes
         bytes memory payload = bytes(greeting);
 
@@ -85,10 +97,24 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
             msg.sender, // refund address
             signedQuote,
             gasLimit,
-            0, // no msg.value forwarding
+            msgValue, // pass through for SVM destinations (in lamports)
             "" // no extra relay instructions
         );
 
         emit GreetingSent(greeting, targetChain, sequence);
+    }
+
+    /**
+     * @notice Send a cross-chain greeting (EVM to EVM, msgValue=0)
+     * @dev For EVM→EVM transfers, msgValue should be 0. Calls sendGreetingWithMsgValue(msgValue=0).
+     */
+    function sendGreeting(
+        string calldata greeting,
+        uint16 targetChain,
+        uint128 gasLimit,
+        uint256 totalCost,
+        bytes calldata signedQuote
+    ) external payable returns (uint64 sequence) {
+        return sendGreetingWithMsgValue(greeting, targetChain, gasLimit, 0, totalCost, signedQuote);
     }
 }

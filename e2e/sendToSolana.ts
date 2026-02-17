@@ -15,7 +15,8 @@ dotenv.config({ path: join(__dirname, '.env') });
 
 // Configuration
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
-const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0xC83dcae38111019e8efbA0B78CE6BA055e7A3f2c';
+// Updated contract with sendGreetingWithMsgValue support for Solana
+const HELLO_WORMHOLE = process.env.HELLO_WORMHOLE_SEPOLIA_CROSSVM || '0x978d3cF51e9358C58a9538933FC3E277C29915C5';
 const PRIVATE_KEY = process.env.PRIVATE_KEY_SEPOLIA!;
 
 // Chain IDs
@@ -32,6 +33,7 @@ const SOLANA_MSG_VALUE_LAMPORTS = 15_000_000n; // 0.015 SOL - a bit more for saf
 // HelloWormhole ABI (just the functions we need)
 const ABI = [
     'function sendGreeting(string greeting, uint16 targetChain, uint128 gasLimit, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
+    'function sendGreetingWithMsgValue(string greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
 ];
 
@@ -93,13 +95,20 @@ async function getExecutorQuote(srcChain: number, dstChain: number, gasLimit: nu
 
     const data = await response.json();
     
-    // Parse quote and calculate estimated cost
+    // Parse quote for debugging/logging
     const parsed = parseSignedQuote(data.signedQuote);
-    const estimatedCost = calculateEstimatedCost(parsed, BigInt(gasLimit));
+    
+    // Use the API's estimatedCost if available - it includes msgValue properly
+    // Only fall back to our calculation if API doesn't provide it
+    const apiEstimatedCost = data.estimatedCost ? BigInt(data.estimatedCost) : null;
+    const calculatedCost = calculateEstimatedCost(parsed, BigInt(gasLimit));
+    
+    console.log(`   API estimatedCost: ${apiEstimatedCost ? apiEstimatedCost.toString() : 'not provided'}`);
+    console.log(`   Our calculation: ${calculatedCost.toString()}`);
     
     return {
         ...data,
-        estimatedCost: estimatedCost.toString(),
+        estimatedCost: (apiEstimatedCost || calculatedCost).toString(),
         parsedQuote: parsed,
     };
 }
@@ -137,30 +146,30 @@ async function main() {
     const quote = await getExecutorQuote(CHAIN_ID_SEPOLIA, CHAIN_ID_SOLANA, gasLimit, SOLANA_MSG_VALUE_LAMPORTS);
     console.log(`   Signed Quote: ${quote.signedQuote.slice(0, 60)}...`);
 
-    // Estimated cost is now calculated from the parsed quote
-    // Note: The Executor seems to expect ~50x more than our formula calculates
-    // Adding a safety multiplier until we figure out the exact formula
-    const calculatedCost = BigInt(quote.estimatedCost);
-    const safetyMultiplier = 50n;  // Executor expects ~46x more
-    const estimatedCost = calculatedCost * safetyMultiplier;
+    // Use the API's estimated cost directly - it properly includes msgValue
+    // Add 10% buffer to be safe
+    const apiCost = BigInt(quote.estimatedCost);
+    const estimatedCost = apiCost * 110n / 100n;  // 10% buffer
     
     console.log(`   Parsed Quote Params:`);
     console.log(`     baseFee: ${quote.parsedQuote.baseFee}`);
     console.log(`     dstGasPrice: ${quote.parsedQuote.dstGasPrice}`);
     console.log(`     srcPrice: ${quote.parsedQuote.srcPrice}`);
     console.log(`     dstPrice: ${quote.parsedQuote.dstPrice}`);
-    console.log(`   Calculated Cost: ${ethers.formatEther(calculatedCost)} ETH`);
-    console.log(`   With ${safetyMultiplier}x safety: ${ethers.formatEther(estimatedCost)} ETH (${estimatedCost} wei)`);
+    console.log(`   API Estimated Cost: ${ethers.formatEther(apiCost)} ETH`);
+    console.log(`   With 10% buffer: ${ethers.formatEther(estimatedCost)} ETH (${estimatedCost} wei)`);
 
     // Create contract instance
     const contract = new ethers.Contract(HELLO_WORMHOLE, ABI, wallet);
 
-    // Send greeting
-    console.log('\n📤 Sending transaction...');
-    const tx = await contract.sendGreeting(
+    // Send greeting with msgValue for Solana (in lamports)
+    console.log('\n📤 Sending transaction with msgValue for Solana...');
+    console.log(`   msgValue: ${SOLANA_MSG_VALUE_LAMPORTS} lamports (${Number(SOLANA_MSG_VALUE_LAMPORTS) / 1e9} SOL)`);
+    const tx = await contract.sendGreetingWithMsgValue(
         greeting,
         CHAIN_ID_SOLANA,
         gasLimit,
+        SOLANA_MSG_VALUE_LAMPORTS,  // msgValue in lamports for Solana
         estimatedCost,
         quote.signedQuote,
         { value: estimatedCost }
