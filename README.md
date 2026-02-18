@@ -131,6 +131,36 @@ sequence = _publishAndRelay(payload, consistencyLevel, totalCost, targetChain, r
     quoterAddress, gasLimit, msgVal, extraInstructions);
 ```
 
+### 5. Cross-VM: Sending to Solana (SVM)
+
+For EVM → Solana transfers, use `sendGreetingWithMsgValue` with `msgValue` in **lamports**:
+
+```solidity
+// msgValue covers rent + fees on Solana (~0.015 SOL = 15_000_000 lamports)
+sequence = sendGreetingWithMsgValue(
+    greeting,
+    1,              // Wormhole chain ID for Solana
+    500000,         // compute units (not gas)
+    15_000_000,     // msgValue in lamports
+    totalCost,
+    signedQuote
+);
+```
+
+**Peer registration is asymmetric** for cross-VM:
+- **EVM side:** Register Solana's **emitter PDA** (not program ID) — see `script/SetupSolanaPeer.s.sol`
+- **Solana side:** Register EVM contract address as bytes32
+
+The emitter PDA is derived from the Solana program ID:
+```typescript
+const [emitterPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("emitter")],
+    programId
+);
+```
+
+See the [Solana demo repo](https://github.com/evgeniko/demo-hello-executor-solana) for the full Solana-side implementation.
+
 ## Testing
 
 ```bash
@@ -161,8 +191,9 @@ forge script script/SetupPeersOnChainQuote.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL
 ```bash
 cd e2e
 cp .env.example .env  # Fill in private keys and contract addresses
-npx tsx testOnChainQuote.ts  # On-chain quote E2E
-npx tsx test.ts              # Off-chain quote E2E
+npx tsx test.ts              # Off-chain quote E2E (Sepolia → Base Sepolia)
+npx tsx testOnChainQuote.ts  # On-chain quote E2E (Sepolia → Base Sepolia)
+npx tsx sendToSolana.ts      # Cross-VM E2E (Sepolia → Solana)
 ```
 
 ## Key Concepts

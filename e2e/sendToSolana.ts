@@ -8,6 +8,7 @@ import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createRelayInstructions } from './relay.js';
+import { parseSignedQuote, calculateEstimatedCost } from './executor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,37 +37,6 @@ const ABI = [
     'function sendGreetingWithMsgValue(string greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
 ];
-
-/**
- * Parse signed quote bytes to extract cost parameters
- * EQ01 layout: prefix(4) + quoter(20) + payee(32) + srcChain(2) + dstChain(2) + 
- *              expiry(8) + baseFee(8) + dstGasPrice(8) + srcPrice(8) + dstPrice(8) + sig(65)
- */
-function parseSignedQuote(signedQuoteHex: string): {
-    baseFee: bigint;
-    dstGasPrice: bigint;
-    srcPrice: bigint;
-    dstPrice: bigint;
-} {
-    const hex = signedQuoteHex.startsWith('0x') ? signedQuoteHex.slice(2) : signedQuoteHex;
-    const bytes = Buffer.from(hex, 'hex');
-    
-    return {
-        baseFee: bytes.readBigUInt64BE(68),
-        dstGasPrice: bytes.readBigUInt64BE(76),
-        srcPrice: bytes.readBigUInt64BE(84),
-        dstPrice: bytes.readBigUInt64BE(92),
-    };
-}
-
-function calculateEstimatedCost(
-    quote: { baseFee: bigint; dstGasPrice: bigint; srcPrice: bigint; dstPrice: bigint },
-    gasLimit: bigint
-): bigint {
-    if (quote.dstPrice === 0n) return quote.baseFee;
-    const relayCost = (gasLimit * quote.dstGasPrice * quote.srcPrice) / quote.dstPrice;
-    return quote.baseFee + relayCost;
-}
 
 async function getExecutorQuote(srcChain: number, dstChain: number, gasLimit: number = 500000, msgValueLamports: bigint = 0n) {
     // Create relay instructions with gasLimit and msgValue
