@@ -6,28 +6,27 @@ Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** a
 
 ## Cross-VM Status (EVM ↔ Solana)
 
-| Route | Status | Notes |
-|-------|--------|-------|
-| EVM → Solana | ✅ **Working** | TX: `0xbf347...` - 3 Solana TXs completed |
-| Solana → Fogo | ✅ **Working** | 3 TXs completed on Fogo |
-| Solana → EVM | ⏳ Testing | VAAs signed (13-16) |
-| Fogo → Solana | ⏳ Code ready | Needs FOGO funding for relay |
+| Route | Status |
+|-------|--------|
+| Sepolia → Solana | ✅ Working |
+| Solana → Sepolia | ✅ Working |
 
 ### Key Changes for Cross-VM
 
 1. **HelloWormhole.sol** - Added `sendGreetingWithMsgValue()` for SVM destinations
 2. **msgValue** - SVM destinations need ~15M lamports (~0.015 SOL) for rent/fees
-3. **Cost calculation** - Use API's `estimatedCost` directly (SDK didn't return it)
+3. **Cost calculation** - Use API's `estimatedCost` directly
 
-### Key Findings: SVM↔SVM Peer Registration
+### Cross-VM Peer Registration
 
-- **Source chain:** Register destination **PROGRAM** ID
-- **Dest chain:** Register source **EMITTER** PDA
+For EVM ↔ Solana, peer registration is **asymmetric**:
+- **EVM side:** Register Solana program's **emitter PDA** (not program ID)
+- **Solana side:** Register EVM contract address (as bytes32)
 
 ### Related
 
 - **Solana repo:** https://github.com/evgeniko/demo-hello-executor-solana
-- **New Sepolia contract:** `0x978d3cF51e9358C58a9538933FC3E277C29915C5`
+- **Cross-VM Sepolia contract:** `0x978d3cF51e9358C58a9538933FC3E277C29915C5`
 
 ---
 
