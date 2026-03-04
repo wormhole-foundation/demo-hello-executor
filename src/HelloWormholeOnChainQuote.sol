@@ -19,11 +19,8 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - sendGreeting takes `quoterAddress` instead of `signedQuote`
  * - Provides `quoteGreeting()` for on-chain cost estimation
  *
- * ## EVM-only
- * On-chain quotes are currently supported for EVM destination chains only.
+ * EVM-only: on-chain quotes are currently supported for EVM destination chains only.
  * For EVM → Solana, use HelloWormhole (off-chain signed quotes) instead.
- * SVM support will be added in a future update once the on-chain quoter
- * supports Solana pricing.
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
     using SequenceReplayProtectionLib for *;
@@ -89,8 +86,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     /**
      * @notice Get a quote for sending a greeting using on-chain quoter
-     * @dev EVM destinations only. SVM destination support via on-chain quoter
-     *      is not yet verified — use HelloWormhole for EVM→Solana.
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
      * @param quoterAddress The on-chain quoter contract address
@@ -121,8 +117,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
 
     /**
      * @notice Send a cross-chain greeting using on-chain quote
-     * @dev EVM destinations only. SVM destination support via on-chain quoter
-     *      is not yet verified — use HelloWormhole for EVM→Solana.
+     * @dev EVM destinations only. For EVM → Solana use HelloWormhole (off-chain signed quotes).
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
