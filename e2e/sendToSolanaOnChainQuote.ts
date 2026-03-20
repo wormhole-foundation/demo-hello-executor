@@ -42,7 +42,9 @@ const CHAIN_ID_SOLANA = 1;
 const QUOTER_ADDRESS = process.env.QUOTER_ADDRESS
     || '0x5241c9276698439fef2780dbab76fec90b633fbd';
 
-// Solana-specific: msgValue in LAMPORTS for rent, priority fees
+// Solana-specific: msgValue in LAMPORTS for rent + priority fees on the Solana side.
+// This is forwarded by the Executor when calling receive_greeting. Adjust upward
+// if delivery fails with insufficient funds for account creation.
 const SOLANA_MSG_VALUE_LAMPORTS = 15_000_000n; // ~0.015 SOL
 
 // Gas limit for Solana execution (compute units)
@@ -145,8 +147,8 @@ async function main() {
             console.log('\nSUCCESS! Message delivered to Solana!');
             console.log(`   Solana TX: ${relay.txs[0].txHash}`);
             console.log(`   https://explorer.solana.com/tx/${relay.txs[0].txHash}?cluster=devnet`);
-        } else if (relay?.status === 'error') {
-            console.log(`\nRelay failed: ${relay.failureCause || relay.error || 'unknown'}`);
+        } else if (relay?.status === 'error' || relay?.status === 'aborted') {
+            console.log(`\nRelay failed: ${relay.failureCause || relay.error || relay.status}`);
         } else if (relay?.status === 'underpaid') {
             console.log('\nRelay underpaid. Try increasing GAS_LIMIT or SOLANA_MSG_VALUE_LAMPORTS.');
         } else {

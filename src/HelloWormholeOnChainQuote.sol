@@ -137,6 +137,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         view
         returns (uint256 totalCost)
     {
+        require(targetChain != CHAIN_ID_SOLANA, "Use quoteGreetingWithMsgValue for Solana");
         return _quoteGreeting(targetChain, gasLimit, 0, quoterAddress);
     }
 
@@ -191,6 +192,7 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         uint256 totalCost,
         address quoterAddress
     ) external payable returns (uint64 sequence) {
+        require(targetChain != CHAIN_ID_SOLANA, "Use sendGreetingWithMsgValue for Solana");
         sequence = _sendGreeting(greeting, targetChain, gasLimit, 0, totalCost, quoterAddress);
     }
 
