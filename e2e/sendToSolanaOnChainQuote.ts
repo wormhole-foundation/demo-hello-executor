@@ -120,9 +120,9 @@ async function main() {
     // Parse GreetingSent event (filter by contract address, then decode)
     const iface = new ethers.Interface(ABI);
     const sentEvent = receipt.logs
-        .filter(log => log.address.toLowerCase() === HELLO_WORMHOLE_OC.toLowerCase())
-        .map(log => iface.parseLog({ topics: log.topics as string[], data: log.data }))
-        .find(event => event?.name === 'GreetingSent');
+        .filter((log: any) => log.address.toLowerCase() === HELLO_WORMHOLE_OC.toLowerCase())
+        .map((log: any) => iface.parseLog({ topics: log.topics as string[], data: log.data }))
+        .find((event: any) => event?.name === 'GreetingSent');
 
     if (sentEvent) {
         console.log(`\nGreetingSent event:`);
