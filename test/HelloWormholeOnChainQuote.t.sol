@@ -227,9 +227,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         string memory tooBig = string(new bytes(513));
 
         vm.deal(address(this), 1 ether);
-        vm.expectRevert(
-            abi.encodeWithSelector(HelloWormholeOnChainQuote.PayloadTooLargeForSolana.selector, 513, 512)
-        );
+        vm.expectRevert(abi.encodeWithSelector(HelloWormholeOnChainQuote.PayloadTooLargeForSolana.selector, 513, 512));
         helloWormholeSepolia.sendGreetingWithMsgValue{value: 0.01 ether}(
             tooBig, CHAIN_ID_SOLANA, 500_000, 15_000_000, 0.01 ether, QUOTER_ADDRESS
         );
@@ -243,12 +241,10 @@ contract HelloWormholeOnChainQuoteTest is Test {
         bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
         helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
 
-        uint256 quoteWithoutMsgValue = helloWormholeSepolia.quoteGreetingWithMsgValue(
-            CHAIN_ID_SOLANA, 500_000, 0, QUOTER_ADDRESS
-        );
-        uint256 quoteWithMsgValue = helloWormholeSepolia.quoteGreetingWithMsgValue(
-            CHAIN_ID_SOLANA, 500_000, 15_000_000, QUOTER_ADDRESS
-        );
+        uint256 quoteWithoutMsgValue =
+            helloWormholeSepolia.quoteGreetingWithMsgValue(CHAIN_ID_SOLANA, 500_000, 0, QUOTER_ADDRESS);
+        uint256 quoteWithMsgValue =
+            helloWormholeSepolia.quoteGreetingWithMsgValue(CHAIN_ID_SOLANA, 500_000, 15_000_000, QUOTER_ADDRESS);
 
         // Quote with msgValue should be higher than without
         assertGt(quoteWithMsgValue, quoteWithoutMsgValue, "msgValue should increase the quote");
