@@ -17,7 +17,6 @@ import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { pollForVAA } from './utils.js';
 import { pollForExecutorStatus } from './executor.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,7 +37,6 @@ if (!HELLO_WORMHOLE_OC) {
 
 // Wormhole chain IDs — full reference: https://docs.wormhole.com/products/reference/chain-ids/
 const CHAIN_ID_SOLANA = 1;
-const CHAIN_ID_SEPOLIA = 10002;
 
 // On-chain quoter address (operated by Wormhole)
 const QUOTER_ADDRESS = process.env.QUOTER_ADDRESS
@@ -131,21 +129,6 @@ async function main() {
                 console.log(`   Sequence: ${vaaSequence}`);
             }
         } catch {}
-    }
-
-    // Poll for VAA
-    const vaaData = await pollForVAA(
-        CHAIN_ID_SEPOLIA,
-        HELLO_WORMHOLE_OC,
-        Number(vaaSequence ?? 0),
-        'Testnet',
-        120000,
-    );
-
-    if (vaaData) {
-        console.log('\nVAA signed!');
-    } else {
-        console.log('\nVAA not signed within timeout');
     }
 
     // Poll executor status
