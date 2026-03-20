@@ -124,13 +124,11 @@ async function main() {
         .map(log => iface.parseLog({ topics: log.topics as string[], data: log.data }))
         .find(event => event?.name === 'GreetingSent');
 
-    let vaaSequence: bigint | undefined;
     if (sentEvent) {
-        vaaSequence = BigInt(sentEvent.args[2]);
         console.log(`\nGreetingSent event:`);
         console.log(`   Message: ${sentEvent.args[0]}`);
         console.log(`   Target Chain: ${sentEvent.args[1]}`);
-        console.log(`   Sequence: ${vaaSequence}`);
+        console.log(`   Sequence: ${sentEvent.args[2]}`);
     }
 
     // Poll executor status
