@@ -117,20 +117,20 @@ async function main() {
     const receipt = await tx.wait();
     console.log(`Confirmed in block ${receipt.blockNumber}`);
 
-    // Parse GreetingSent event
-    let vaaSequence: bigint | undefined;
+    // Parse GreetingSent event (filter by contract address, then decode)
     const iface = new ethers.Interface(ABI);
-    for (const log of receipt.logs) {
-        try {
-            const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
-            if (parsed?.name === 'GreetingSent') {
-                vaaSequence = BigInt(parsed.args[2]);
-                console.log(`\nGreetingSent event:`);
-                console.log(`   Message: ${parsed.args[0]}`);
-                console.log(`   Target Chain: ${parsed.args[1]}`);
-                console.log(`   Sequence: ${vaaSequence}`);
-            }
-        } catch {}
+    const sentEvent = receipt.logs
+        .filter(log => log.address.toLowerCase() === HELLO_WORMHOLE_OC.toLowerCase())
+        .map(log => iface.parseLog({ topics: log.topics as string[], data: log.data }))
+        .find(event => event?.name === 'GreetingSent');
+
+    let vaaSequence: bigint | undefined;
+    if (sentEvent) {
+        vaaSequence = BigInt(sentEvent.args[2]);
+        console.log(`\nGreetingSent event:`);
+        console.log(`   Message: ${sentEvent.args[0]}`);
+        console.log(`   Target Chain: ${sentEvent.args[1]}`);
+        console.log(`   Sequence: ${vaaSequence}`);
     }
 
     // Poll executor status
