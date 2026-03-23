@@ -21,8 +21,8 @@ import {toUniversalAddress} from "wormhole-solidity-sdk/Utils.sol";
  * - Provides `quoteGreeting()` for on-chain cost estimation
  *
  * Supports both EVM and Solana destinations:
- * - EVM: use `sendGreeting` / `quoteGreeting` (msgValue = 0)
- * - Solana: use `sendGreetingWithMsgValue` / `quoteGreetingWithMsgValue`
+ * - EVM: use `sendGreeting` / `quoteGreeting` (no msgValue)
+ * - Solana: use overloaded `sendGreeting` / `quoteGreeting` with msgValue param
  *   (msgValue in lamports for rent/fees)
  */
 contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessControl {
@@ -122,11 +122,12 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
             greeting = string(payload);
         }
 
+        // Emit an event with the greeting message and sender details
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
     /**
-     * @notice Get a quote for sending a greeting using on-chain quoter
+     * @notice Get a quote for sending a greeting using on-chain quoter (EVM destinations)
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
      * @param quoterAddress The on-chain quoter contract address
@@ -137,47 +138,51 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         view
         returns (uint256 totalCost)
     {
-        require(targetChain != CHAIN_ID_SOLANA, "Use quoteGreetingWithMsgValue for Solana");
-        return _quoteGreeting(targetChain, gasLimit, 0, quoterAddress);
+        return quoteGreeting(targetChain, gasLimit, 0, quoterAddress);
     }
 
     /**
      * @notice Get a quote for sending a greeting with msgValue (needed for Solana destinations)
+     * @param targetChain The Wormhole chain ID of the destination
+     * @param gasLimit Gas limit for execution on target chain
      * @param msgValue For Solana: lamports for rent/priority fees. For EVM: 0.
+     * @param quoterAddress The on-chain quoter contract address
+     * @return totalCost The total cost including Wormhole message fee and executor fee
      */
-    function quoteGreetingWithMsgValue(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress)
-        external
-        view
-        returns (uint256 totalCost)
-    {
-        return _quoteGreeting(targetChain, gasLimit, msgValue, quoterAddress);
-    }
-
-    function _quoteGreeting(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress)
-        internal
+    function quoteGreeting(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress)
+        public
         view
         returns (uint256 totalCost)
     {
         bytes32 peerAddress = peers[targetChain];
         require(peerAddress != bytes32(0), "No peer set for target chain");
 
+        // Build relay instructions
         bytes memory relayInstructions = RelayInstructionLib.encodeGas(gasLimit, msgValue);
 
+        // Build request bytes (same format as _publishAndCompose uses)
         bytes memory requestBytes = RequestLib.encodeVaaMultiSigRequest(
             _chainId,
             toUniversalAddress(address(this)),
             0 // sequence placeholder - not needed for quote
         );
 
+        // Get executor quote from on-chain quoter
         uint256 executorFee = _executorQuoterRouter.quoteExecution(
-            targetChain, peerAddress, address(0), quoterAddress, requestBytes, relayInstructions
+            targetChain,
+            peerAddress,
+            address(0), // refund address not needed for quote
+            quoterAddress,
+            requestBytes,
+            relayInstructions
         );
 
+        // Total = executor fee + Wormhole message fee
         totalCost = executorFee + _coreBridge.messageFee();
     }
 
     /**
-     * @notice Send a cross-chain greeting using on-chain quote
+     * @notice Send a cross-chain greeting using on-chain quote (EVM destinations)
      * @param greeting The message to send
      * @param targetChain The Wormhole chain ID of the destination
      * @param gasLimit Gas limit for execution on target chain
@@ -192,49 +197,47 @@ contract HelloWormholeOnChainQuote is ExecutorSendReceiveQuoteOnChain, AccessCon
         uint256 totalCost,
         address quoterAddress
     ) external payable returns (uint64 sequence) {
-        require(targetChain != CHAIN_ID_SOLANA, "Use sendGreetingWithMsgValue for Solana");
-        sequence = _sendGreeting(greeting, targetChain, gasLimit, 0, totalCost, quoterAddress);
+        sequence = sendGreeting(greeting, targetChain, gasLimit, 0, totalCost, quoterAddress);
     }
 
     /**
      * @notice Send a cross-chain greeting with msgValue (needed for Solana destinations)
+     * @param greeting The message to send
+     * @param targetChain The Wormhole chain ID of the destination
+     * @param gasLimit Gas limit for execution on target chain
      * @param msgValue For Solana: lamports for rent/priority fees. For EVM: 0.
+     * @param totalCost Total cost (Wormhole fee + executor fee from quoteGreeting)
+     * @param quoterAddress The on-chain quoter contract address
+     * @return sequence The Wormhole sequence number
      */
-    function sendGreetingWithMsgValue(
+    function sendGreeting(
         string calldata greeting,
         uint16 targetChain,
         uint128 gasLimit,
         uint128 msgValue,
         uint256 totalCost,
         address quoterAddress
-    ) external payable returns (uint64 sequence) {
-        sequence = _sendGreeting(greeting, targetChain, gasLimit, msgValue, totalCost, quoterAddress);
-    }
-
-    function _sendGreeting(
-        string calldata greeting,
-        uint16 targetChain,
-        uint128 gasLimit,
-        uint128 msgValue,
-        uint256 totalCost,
-        address quoterAddress
-    ) internal returns (uint64 sequence) {
+    ) public payable returns (uint64 sequence) {
+        // Encode the greeting as bytes
         bytes memory payload = bytes(greeting);
 
+        // Solana enforces a 512-byte cap on incoming messages; fail early so the
+        // relay fee is not spent on a delivery that will be rejected on Solana.
         if (targetChain == CHAIN_ID_SOLANA && payload.length > SOLANA_MAX_PAYLOAD_BYTES) {
             revert PayloadTooLargeForSolana(payload.length, SOLANA_MAX_PAYLOAD_BYTES);
         }
 
+        // Publish and relay the message to the target chain using on-chain quote
         sequence = _publishAndRelay(
             payload,
             CONSISTENCY_LEVEL_INSTANT,
             totalCost,
             targetChain,
-            msg.sender,
-            quoterAddress,
+            msg.sender, // refund address
+            quoterAddress, // on-chain quoter instead of signedQuote
             gasLimit,
             msgValue,
-            ""
+            "" // no extra relay instructions
         );
         emit GreetingSent(greeting, targetChain, sequence);
     }

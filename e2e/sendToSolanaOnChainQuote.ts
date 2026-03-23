@@ -3,11 +3,11 @@
  * Send greeting from Sepolia to Solana via Executor using ON-CHAIN QUOTE
  *
  * This uses the updated HelloWormholeOnChainQuote contract which supports
- * Solana destinations via sendGreetingWithMsgValue + quoteGreetingWithMsgValue.
+ * Solana destinations via overloaded sendGreeting + quoteGreeting (with msgValue).
  *
  * Flow:
- *   1. quoteGreetingWithMsgValue  — get on-chain quote (includes msgValue for Solana rent)
- *   2. sendGreetingWithMsgValue   — publish Wormhole message + request relay via quoter router
+ *   1. quoteGreeting(targetChain, gasLimit, msgValue, quoter) — get on-chain quote
+ *   2. sendGreeting(greeting, targetChain, gasLimit, msgValue, totalCost, quoter) — publish + relay
  *
  * Usage:
  *   npx tsx e2e/sendToSolanaOnChainQuote.ts "Hello from Sepolia (on-chain quote)!"
@@ -51,8 +51,8 @@ const SOLANA_MSG_VALUE_LAMPORTS = 15_000_000n; // ~0.015 SOL
 const GAS_LIMIT = 500_000n;
 
 const ABI = [
-    'function quoteGreetingWithMsgValue(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress) external view returns (uint256 totalCost)',
-    'function sendGreetingWithMsgValue(string calldata greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, address quoterAddress) external payable returns (uint64 sequence)',
+    'function quoteGreeting(uint16 targetChain, uint128 gasLimit, uint128 msgValue, address quoterAddress) external view returns (uint256 totalCost)',
+    'function sendGreeting(string calldata greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, address quoterAddress) external payable returns (uint64 sequence)',
     'function peers(uint16 chainId) external view returns (bytes32)',
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
 ];
@@ -85,7 +85,7 @@ async function main() {
     console.log(`  msgValue: ${SOLANA_MSG_VALUE_LAMPORTS} lamports (${Number(SOLANA_MSG_VALUE_LAMPORTS) / 1e9} SOL)`);
     console.log(`  Quoter: ${QUOTER_ADDRESS}`);
 
-    const totalCost = await contract.quoteGreetingWithMsgValue(
+    const totalCost = await contract.quoteGreeting(
         CHAIN_ID_SOLANA,
         GAS_LIMIT,
         SOLANA_MSG_VALUE_LAMPORTS,
@@ -100,7 +100,7 @@ async function main() {
 
     // Step 2: Send greeting
     console.log('\nSending greeting with on-chain quote...');
-    const tx = await contract.sendGreetingWithMsgValue(
+    const tx = await contract.sendGreeting(
         greeting,
         CHAIN_ID_SOLANA,
         GAS_LIMIT,
