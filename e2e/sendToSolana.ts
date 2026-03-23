@@ -35,8 +35,7 @@ const SOLANA_MSG_VALUE_LAMPORTS = 15_000_000n; // 0.015 SOL - a bit more for saf
 
 // HelloWormhole ABI (just the functions we need)
 const ABI = [
-    'function sendGreeting(string greeting, uint16 targetChain, uint128 gasLimit, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
-    'function sendGreetingWithMsgValue(string greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
+    'function sendGreeting(string greeting, uint16 targetChain, uint128 gasLimit, uint128 msgValue, uint256 totalCost, bytes signedQuote) external payable returns (uint64)',
     'event GreetingSent(string greeting, uint16 targetChain, uint64 sequence)',
 ];
 
@@ -152,7 +151,7 @@ async function main() {
     // Send greeting with msgValue for Solana (in lamports)
     console.log('\nSending transaction with msgValue for Solana...');
     console.log(`   msgValue: ${SOLANA_MSG_VALUE_LAMPORTS} lamports (${Number(SOLANA_MSG_VALUE_LAMPORTS) / 1e9} SOL)`);
-    const tx = await contract.sendGreetingWithMsgValue(
+    const tx = await contract.sendGreeting(
         greeting,
         CHAIN_ID_SOLANA,
         gasLimit,

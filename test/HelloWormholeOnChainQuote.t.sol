@@ -4,11 +4,21 @@ pragma solidity ^0.8.22;
 import {Test} from "forge-std/Test.sol";
 import {HelloWormholeOnChainQuote} from "../src/HelloWormholeOnChainQuote.sol";
 import {TestnetChainConstants} from "wormhole-solidity-sdk/testing/ChainConsts.sol";
-import {CHAIN_ID_SEPOLIA, CHAIN_ID_BASE_SEPOLIA} from "wormhole-solidity-sdk/constants/Chains.sol";
+import {CHAIN_ID_SEPOLIA, CHAIN_ID_BASE_SEPOLIA, CHAIN_ID_SOLANA} from "wormhole-solidity-sdk/constants/Chains.sol";
+
+// Exposes _executeVaa for unit-testing the payload decoding logic.
+contract HelloWormholeOnChainQuoteHarness is HelloWormholeOnChainQuote {
+    constructor(address coreBridge, address router) HelloWormholeOnChainQuote(coreBridge, router) {}
+
+    function executeVaa(bytes calldata payload, uint16 peerChain, bytes32 peerAddress) external {
+        _executeVaa(payload, 0, peerChain, peerAddress, 0, 0);
+    }
+}
 
 contract HelloWormholeOnChainQuoteTest is Test {
     HelloWormholeOnChainQuote public helloWormholeSepolia;
     HelloWormholeOnChainQuote public helloWormholeBaseSepolia;
+    HelloWormholeOnChainQuoteHarness public harness;
 
     // ExecutorQuoterRouter addresses from testnet deployment
     address constant SEPOLIA_EXECUTOR_QUOTER_ROUTER = 0xc0C35D7bfBc4175e0991Ae294f561b433eA4158f;
@@ -30,6 +40,7 @@ contract HelloWormholeOnChainQuoteTest is Test {
         address sepoliaCoreBridge = TestnetChainConstants._coreBridge(CHAIN_ID_SEPOLIA);
 
         helloWormholeSepolia = new HelloWormholeOnChainQuote(sepoliaCoreBridge, SEPOLIA_EXECUTOR_QUOTER_ROUTER);
+        harness = new HelloWormholeOnChainQuoteHarness(sepoliaCoreBridge, SEPOLIA_EXECUTOR_QUOTER_ROUTER);
 
         // Deploy on Base Sepolia fork
         vm.selectFork(baseSepoliaFork);
@@ -156,5 +167,85 @@ contract HelloWormholeOnChainQuoteTest is Test {
             "Hello!", CHAIN_ID_BASE_SEPOLIA, 200000, totalCost, QUOTER_ADDRESS
         );
         assertTrue(sequence < type(uint64).max);
+    }
+
+    // ── Solana peer registration ─────────────────────────────────────────────
+
+    function test_SetSolanaPeer() public {
+        vm.selectFork(sepoliaFork);
+
+        // For SVM peers, TWO addresses must be registered:
+        //   peers[chainId]       = program ID (executor routing, must be executable)
+        //   vaaEmitters[chainId] = emitter PDA (incoming VAA verification)
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        bytes32 solanaEmitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
+
+        helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+        helloWormholeSepolia.setVaaEmitter(CHAIN_ID_SOLANA, solanaEmitterPda);
+
+        assertEq(helloWormholeSepolia.peers(CHAIN_ID_SOLANA), solanaProgramId);
+        assertEq(helloWormholeSepolia.vaaEmitters(CHAIN_ID_SOLANA), solanaEmitterPda);
+    }
+
+    // ── Solana payload decoding ──────────────────────────────────────────────
+
+    function test_ExecuteVaaSolanaPayloadStripsHeader() public {
+        vm.selectFork(sepoliaFork);
+
+        // Simulate a Solana Hello payload: 0x01 | u16_BE(len) | utf8 message
+        string memory message = "Hello from Solana";
+        bytes memory msgBytes = bytes(message);
+        bytes memory payload = abi.encodePacked(uint8(0x01), uint16(msgBytes.length), msgBytes);
+
+        bytes32 emitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
+
+        vm.expectEmit(true, true, true, true);
+        emit HelloWormholeOnChainQuote.GreetingReceived(message, CHAIN_ID_SOLANA, emitterPda);
+        harness.executeVaa(payload, CHAIN_ID_SOLANA, emitterPda);
+    }
+
+    function test_ExecuteVaaSolanaPayloadRevertsOnBadHeader() public {
+        vm.selectFork(sepoliaFork);
+
+        // Payload missing the 0x01 type tag
+        bytes memory payload = abi.encodePacked(uint8(0x00), bytes32(0));
+        bytes32 emitterPda = bytes32(0x58235d29729e44920df367836a92ab77fcee36b7a27b03304cd699f5eb0efae5);
+
+        vm.expectRevert(bytes("HelloWormhole: expected Solana Hello payload"));
+        harness.executeVaa(payload, CHAIN_ID_SOLANA, emitterPda);
+    }
+
+    // ── Solana payload size guard ────────────────────────────────────────────
+
+    function test_SendGreetingRevertsWhenPayloadExceedsSolanaLimit() public {
+        vm.selectFork(sepoliaFork);
+
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+
+        // 513-byte string — one byte over the 512-byte Solana cap
+        string memory tooBig = string(new bytes(513));
+
+        vm.deal(address(this), 1 ether);
+        vm.expectRevert(abi.encodeWithSelector(HelloWormholeOnChainQuote.PayloadTooLargeForSolana.selector, 513, 512));
+        helloWormholeSepolia.sendGreeting{value: 0.01 ether}(
+            tooBig, CHAIN_ID_SOLANA, 500_000, 15_000_000, 0.01 ether, QUOTER_ADDRESS
+        );
+    }
+
+    // ── quoteGreeting (overloaded with msgValue) ─────────────────────────────
+
+    function test_QuoteGreetingOverloadedIncludesMsgValue() public {
+        vm.selectFork(sepoliaFork);
+
+        bytes32 solanaProgramId = bytes32(0x62cf7e5a219d24a831e51b2c2417fa898920b930fd1c6947f3a4fc8feec1020f);
+        helloWormholeSepolia.setPeer(CHAIN_ID_SOLANA, solanaProgramId);
+
+        uint256 quoteWithoutMsgValue = helloWormholeSepolia.quoteGreeting(CHAIN_ID_SOLANA, 500_000, 0, QUOTER_ADDRESS);
+        uint256 quoteWithMsgValue =
+            helloWormholeSepolia.quoteGreeting(CHAIN_ID_SOLANA, 500_000, 15_000_000, QUOTER_ADDRESS);
+
+        // Quote with msgValue should be higher than without
+        assertGt(quoteWithMsgValue, quoteWithoutMsgValue, "msgValue should increase the quote");
     }
 }

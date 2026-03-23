@@ -104,8 +104,18 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
         emit GreetingReceived(greeting, peerChain, peerAddress);
     }
 
+    function sendGreeting(
+        string calldata greeting,
+        uint16 targetChain,
+        uint128 gasLimit,
+        uint256 totalCost,
+        bytes calldata signedQuote
+    ) external payable returns (uint64 sequence) {
+        sequence = sendGreeting(greeting, targetChain, gasLimit, 0, totalCost, signedQuote);
+    }
+
     // msgValue: lamports for Solana destinations, 0 for EVM
-    function sendGreetingWithMsgValue(
+    function sendGreeting(
         string calldata greeting,
         uint16 targetChain,
         uint128 gasLimit,
@@ -131,39 +141,7 @@ contract HelloWormhole is ExecutorSendReceiveQuoteOffChain, AccessControl {
             msg.sender, // refund address
             signedQuote,
             gasLimit,
-            msgValue, // pass through for SVM destinations (in lamports)
-            "" // no extra relay instructions
-        );
-
-        emit GreetingSent(greeting, targetChain, sequence);
-    }
-
-    function sendGreeting(
-        string calldata greeting,
-        uint16 targetChain,
-        uint128 gasLimit,
-        uint256 totalCost,
-        bytes calldata signedQuote
-    ) external payable returns (uint64 sequence) {
-        // Encode the greeting as bytes
-        bytes memory payload = bytes(greeting);
-
-        // Solana enforces a 512-byte cap on incoming messages; fail early so the
-        // relay fee is not spent on a delivery that will be rejected on Solana.
-        if (targetChain == CHAIN_ID_SOLANA && payload.length > SOLANA_MAX_PAYLOAD_BYTES) {
-            revert PayloadTooLargeForSolana(payload.length, SOLANA_MAX_PAYLOAD_BYTES);
-        }
-
-        // Publish and relay the message to the target chain
-        sequence = _publishAndRelay(
-            payload,
-            CONSISTENCY_LEVEL_INSTANT, // choose safe or finalized based on your needs
-            totalCost,
-            targetChain,
-            msg.sender, // refund address
-            signedQuote,
-            gasLimit,
-            0, // no msg.value forwarding
+            msgValue,
             "" // no extra relay instructions
         );
 

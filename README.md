@@ -4,7 +4,7 @@ Cross-chain messaging with Wormhole Executor, demonstrating both **off-chain** a
 
 This repo covers two use cases:
 - **EVM ↔ EVM** — both off-chain and on-chain quotes, Sepolia ↔ Base Sepolia
-- **EVM ↔ Solana** — off-chain quotes only (see [Cross-VM section](#cross-vm-evm--solana))
+- **EVM ↔ Solana** — both off-chain and on-chain quotes (see [Cross-VM section](#cross-vm-evm--solana))
 
 > **License:** Code provided "AS IS", without warranties. Audit before mainnet deployment.
 
@@ -30,8 +30,6 @@ function quoteGreeting(uint16 targetChain, uint128 gasLimit, address quoterAddre
 function sendGreeting(..., address quoterAddress) external payable;
 ```
 
-> **Note:** On-chain quotes currently support EVM destination chains only.
-> For EVM → Solana, use `HelloWormhole` (off-chain signed quotes) instead.
 
 ## Deployed Contracts (Testnet)
 
@@ -150,7 +148,7 @@ npx tsx test.ts              # Off-chain quote E2E
 
 ## Cross-VM: EVM ↔ Solana
 
-Uses `HelloWormhole` (off-chain quotes) — on-chain quotes do not yet support Solana destinations.
+Both `HelloWormhole` (off-chain quotes) and `HelloWormholeOnChainQuote` (on-chain quotes) support Solana destinations.
 
 See the [Solana demo repo](https://github.com/wormhole-foundation/demo-hello-executor-solana) for the Solana-side implementation.
 
@@ -179,11 +177,11 @@ const emitterPdaBytes32 = '0x' + Buffer.from(emitterPda.toBytes()).toString('hex
 
 ### Sending to Solana
 
-Use `sendGreetingWithMsgValue` with `msgValue` in **lamports** to cover rent and fees on Solana:
+Use the overloaded `sendGreeting` with `msgValue` in **lamports** to cover rent and fees on Solana:
 
 ```solidity
 // msgValue covers rent + fees on Solana (~0.015 SOL = 15_000_000 lamports)
-sequence = sendGreetingWithMsgValue(
+sequence = sendGreeting(
     greeting,
     1,              // Wormhole chain ID for Solana
     500000,         // compute units (not gas)

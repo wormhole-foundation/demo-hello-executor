@@ -120,7 +120,7 @@ contract HelloWormholeTest is Test {
 
         vm.deal(address(this), 1 ether);
         vm.expectRevert(abi.encodeWithSelector(HelloWormhole.PayloadTooLargeForSolana.selector, 513, 512));
-        helloWormholeSepolia.sendGreetingWithMsgValue{value: 0.01 ether}(
+        helloWormholeSepolia.sendGreeting{value: 0.01 ether}(
             tooBig, CHAIN_ID_SOLANA, 500_000, 15_000_000, 0.01 ether, ""
         );
     }
@@ -151,7 +151,7 @@ contract HelloWormholeTest is Test {
         harness.executeVaa(payload, CHAIN_ID_SOLANA, emitterPda);
     }
 
-    function test_SendGreetingWithMsgValueRevertsWithMockExecutor() public {
+    function test_SendGreetingOverloadedRevertsWithMockExecutor() public {
         vm.selectFork(sepoliaFork);
 
         // Register a Solana peer (program ID for executor routing)
@@ -168,7 +168,7 @@ contract HelloWormholeTest is Test {
         // but confirms ABI compatibility)
         vm.deal(address(this), 1 ether);
         vm.expectRevert(); // Expected: mock executor can't process
-        helloWormholeSepolia.sendGreetingWithMsgValue{value: 0.01 ether}(
+        helloWormholeSepolia.sendGreeting{value: 0.01 ether}(
             "Hello Solana!",
             CHAIN_ID_SOLANA,
             gasLimit,

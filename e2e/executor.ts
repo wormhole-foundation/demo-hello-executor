@@ -225,11 +225,15 @@ export async function pollForExecutorStatus(
             // Use SDK's fetchStatus function
             const status = await sdkDefs.fetchStatus(apiUrl, txHash, chain);
 
-            // fetchStatus returns an array of StatusResponse objects
-            // An empty array means the transaction hasn't been seen yet
+            // fetchStatus returns an array of StatusResponse objects.
+            // Wait for a terminal status before returning.
             if (Array.isArray(status) && status.length > 0) {
-                console.log(`\n✅ Executor has processed the transaction!`);
-                return status;
+                const s = status[0].status;
+                if (['submitted', 'error', 'underpaid', 'aborted'].includes(s)) {
+                    console.log(`\n✅ Executor status: ${s}`);
+                    return status;
+                }
+                process.stdout.write(`(${s})`);
             }
         } catch (error) {
             // Ignore errors and continue polling
