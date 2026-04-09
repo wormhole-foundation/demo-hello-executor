@@ -219,9 +219,9 @@ npx tsx sendToSolana.ts      # EVM → Solana
 
 | Concept                 | Description                                                                  |
 | ----------------------- | ---------------------------------------------------------------------------- |
-| **Chain IDs**           | Wormhole uses its own IDs: `CHAIN_ID_SEPOLIA`, `CHAIN_ID_BASE_SEPOLIA`, etc. |
-| **Universal Addresses** | Cross-chain addresses as `bytes32` via `toUniversalAddress()`                |
-| **Consistency Levels**  | `1`=Instant, `200`=Finalized, `201`=Safe                                     |
+| **Chain IDs**           | https://wormhole.com/docs/products/reference/chain-ids/                      |
+| **Universal Addresses** | https://wormhole.com/docs/products/reference/wormhole-formatted-addresses/   |
+| **Consistency Levels**  | https://wormhole.com/docs/products/reference/consistency-levels/             |
 
 ## Resources
 
